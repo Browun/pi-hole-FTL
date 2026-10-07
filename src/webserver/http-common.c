@@ -250,6 +250,17 @@ bool get_uint64_var_msg(const char *source, const char *var, uint64_t *num, cons
 		return false;
 	}
 
+	// strtoul() and strtoull() accept a leading minus sign and silently
+	// wrap the negated value (e.g., "-1" becomes UINT64_MAX), reject it
+	const char *first = buffer;
+	while(isspace((unsigned char)*first))
+		first++;
+	if(*first == '-')
+	{
+		*msg = "Negative values are not allowed";
+		return false;
+	}
+
 	// Try to get the value
 	char *endptr = NULL;
 	errno = 0;
@@ -260,8 +271,13 @@ bool get_uint64_var_msg(const char *source, const char *var, uint64_t *num, cons
 #endif
 
 	// Error checking
-	if ((errno == ERANGE && val == UINT64_MAX) ||
-	    (errno != 0 && val == 0))
+	if (errno == ERANGE && val == UINT64_MAX)
+	{
+		*msg = "Value too large";
+		return false;
+	}
+
+	if (errno != 0 && val == 0)
 	{
 		*msg = strerror(errno);
 		return false;

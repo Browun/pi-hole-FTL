@@ -437,8 +437,9 @@ int api_queries(struct ftl_conn *api)
 		{
 			// Do not start at the most recent, but at an older
 			// query (so new queries do not show up suddenly in the
-			// log and shift pages)
-			if(unum <= (uint64_t)largest_db_index && msg == NULL)
+			// log and shift pages). There is no valid cursor while
+			// the database is empty (largest_db_index is -1)
+			if(largest_db_index >= 0 && unum <= (uint64_t)largest_db_index && msg == NULL)
 			{
 				cursor = unum;
 				cursor_set = true;
@@ -446,7 +447,9 @@ int api_queries(struct ftl_conn *api)
 			}
 			else
 			{
-				if(msg == NULL)
+				if(msg == NULL && largest_db_index < 0)
+					msg = "No queries stored yet";
+				else if(msg == NULL)
 					msg = "Cursor larger than largest database index";
 				// Cursors larger than the current known number
 				// of queries are invalid
@@ -1155,9 +1158,14 @@ int api_queries(struct ftl_conn *api)
 	{
 		// Send cursor pointing to the firstID of the data obtained in
 		// this query. This ensures we get a static result by skipping
-		// any newer queries.
-		log_web_debug(DEBUG_API, "Sending cursor %lld (firstID)", get_max_db_idx());
-		JSON_ADD_NUMBER_TO_OBJECT(json, "cursor", get_max_db_idx());
+		// any newer queries. If there are no queries yet, there is no
+		// cursor to send (instead of the -1 placeholder index)
+		const sqlite3_int64 max_db_idx = get_max_db_idx();
+		log_web_debug(DEBUG_API, "Sending cursor %lld (firstID)", max_db_idx);
+		if(max_db_idx >= 0)
+			JSON_ADD_NUMBER_TO_OBJECT(json, "cursor", max_db_idx);
+		else
+			JSON_ADD_NULL_TO_OBJECT(json, "cursor");
 	}
 
 	// DataTables specific properties

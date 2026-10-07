@@ -1436,6 +1436,25 @@ class TestQueriesAdditional:
         assert ids1.isdisjoint(ids2), \
             f"Pages overlap: {ids1 & ids2}"
 
+    def test_queries_negative_cursor_rejected(self, api_session):
+        """A negative cursor is rejected instead of wrapping to UINT64_MAX."""
+        r = api_session.get(f"{FTL_URL}/api/queries?cursor=-1", timeout=5)
+        assert r.status_code == 400
+        err = r.json()["error"]
+        assert err["message"] == "Requested cursor is invalid"
+        assert err["hint"] == "Negative values are not allowed"
+
+    def test_queries_oversized_cursor_rejected(self, api_session):
+        """A cursor larger than UINT64_MAX is rejected with a clear hint
+        instead of strerror(ERANGE). The value is the one the web interface
+        sent back after FTL had returned UINT64_MAX as a double (2^64)."""
+        r = api_session.get(
+            f"{FTL_URL}/api/queries?cursor=18446744073709552000", timeout=5)
+        assert r.status_code == 400
+        err = r.json()["error"]
+        assert err["message"] == "Requested cursor is invalid"
+        assert err["hint"] == "Value too large"
+
     def test_queries_suggestions(self, api_session):
         data = _j(api_session.get(f"{FTL_URL}/api/queries/suggestions", timeout=5))
         s = data["suggestions"]
